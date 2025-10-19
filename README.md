@@ -53,7 +53,7 @@ Follow these instructions to get your own Jellyfin Replay instance running local
 
 3.  **Run the Application:**
     ```bash
-    python3 jellyfin_replay.py
+    python3 app.py
     ```
     The application will start, and you should see output similar to this:
     ```
@@ -69,29 +69,6 @@ Follow these instructions to get your own Jellyfin Replay instance running local
 
 5.  **Get Your Replay!**
     - Once the configuration is saved, click the **Get Replay** button to start your personalized music countdown.
-
-### Generating Replays for Other Users (Optional)
-
-By default, the application is hardcoded to generate a replay for a specific user ID. If you want to generate a replay for a different user on your server, you will need to find their unique User ID.
-
-1.  **Find the User ID:**
-    - In your Jellyfin dashboard, navigate to **Users**.
-    - Click on the user you want to generate a replay for.
-    - Look at the URL in your browser's address bar. It will look something like this:
-      `http://your-server:8096/web/index.html#!/user?userId=23fe68794ee1415db28073061646c169`
-    - The long string of characters after `userId=` is the User ID. Copy this value.
-
-2.  **Update the Code:**
-    - Open the `jellyfin_replay.py` file in a text editor.
-    - Locate the line inside the HTML template that contains the `user_id` (around line 265):
-      ```html
-      <input type="hidden" name="user_id" value="23fe68794ee1415db28073061646c169">
-      ```
-    - Replace the `value` with the new User ID you copied.
-    - Save the file. The Flask server will automatically restart with the changes.
-    - Now, clicking "Get Replay" will generate the countdown for the new user.
-
----
 
 ## 🔧 Technical Details
 
