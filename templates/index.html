@@ -1,34 +1,3 @@
-import os
-import json
-from datetime import datetime
-import requests
-from flask import Flask, render_template_string, request, redirect, url_for
-
-app = Flask(__name__)
-
-CONFIG_FILE = "config.json"
-
-# ---------------------------
-# Load / Save config
-# ---------------------------
-def load_config():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
-            return json.load(f)
-    return {"server": "", "apikey": ""}
-
-def save_config(server, apikey):
-    cfg = {"server": server, "apikey": apikey}
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(cfg, f)
-    return cfg
-
-config = load_config()
-
-# ---------------------------
-# HTML template
-# ---------------------------
-template = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -41,12 +10,12 @@ template = """
       --bg-color-4: #111;
     }
 
-    body { 
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      color: #eee; 
-      text-align:center; 
-      margin:0; 
-      padding:0; 
+    body {
+      font-family: -apple-system, BlinkMacMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #eee;
+      text-align:center;
+      margin:0;
+      padding:0;
       background-color: #000;
       overflow: hidden;
       display: flex;
@@ -55,7 +24,7 @@ template = """
       height: 100vh;
       cursor: pointer;
     }
-    
+
     @keyframes morph-background {
         0%   { background-position: 0% 50%, 100% 50%, 0% 100%, 100% 0%; }
         50%  { background-position: 50% 0%, 50% 100%, 100% 50%, 0% 50%; }
@@ -76,10 +45,11 @@ template = """
       position: absolute; top: 10px; left: 50%; transform: translateX(-50%); padding: 10px; z-index: 100;
       background: rgba(0, 0, 0, 0.2); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
       border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 15px; cursor: default;
+      display: flex; gap: 10px; align-items: center;
     }
-    
-    input, .top-bar button { 
-      padding:8px; margin:5px; border-radius:8px; border:1px solid rgba(255,255,255,0.2);
+
+    input, .top-bar button {
+      padding:8px; margin:0; border-radius:8px; border:1px solid rgba(255,255,255,0.2);
       outline:none; background: rgba(0,0,0,0.3); color: #fff;
     }
     .top-bar button { cursor: pointer; background: rgba(255,255,255,0.2); }
@@ -92,6 +62,7 @@ template = """
       cursor: pointer; font-size: 32px; margin: 0 50px;
       width: 70px; height: 70px; line-height: 65px;
       transition: background-color 0.3s, transform 0.3s; z-index: 50;
+      display: flex; align-items: center; justify-content: center;
     }
     .nav-button:hover { background-color: rgba(0, 0, 0, 0.4); transform: scale(1.1); }
     .track-card {
@@ -154,19 +125,15 @@ template = """
   <canvas id="color-thief" style="display:none;"></canvas>
 
   <div class="top-bar">
-    <form action="/config" method="post" style="display:inline;">
+    <form id="configForm" action="/config" method="post">
       <input type="text" name="server" placeholder="Server URL" value="{{ server }}" required>
       <input type="text" name="apikey" placeholder="API Key" value="{{ apikey }}" required>
       <button type="submit">Save</button>
     </form>
-    <form action="/replay" method="get" style="display:inline;">
-      <input type="hidden" name="user_id" value="23fe68794ee1415db28073061646c169">
-      <button type="submit">Get Replay</button>
-    </form>
+    <button id="getReplayButton">Get Replay</button>
   </div>
 
-  {% if tracks %}
-  <main id="carousel-container" class="carousel-container">
+  <main id="carousel-container" class="carousel-container" style="display: none; opacity: 0;">
     <button id="prevBtn" class="nav-button">&lt;</button>
     <div id="main-track-card" class="track-card">
       <div class="track-info">
@@ -183,8 +150,8 @@ template = """
     </div>
     <button id="nextBtn" class="nav-button">&gt;</button>
   </main>
-  
-  <div id="rank-container" class="rank-container">
+
+  <div id="rank-container" class="rank-container" style="display: none; opacity: 0;">
       <div id="rank-display" class="rank-display"></div>
       <div id="rank-playcount" class="rank-playcount"></div>
   </div>
@@ -194,15 +161,15 @@ template = """
       <button id="replay-button">Play Again</button>
       <div id="track-list"></div>
   </div>
-  
-  <div id="timeline-container">
+
+  <div id="timeline-container" style="display: none; opacity: 0;">
       <div id="timeline-bar"></div>
   </div>
 
   <script>
     const FADE_DURATION = 800;
 
-    const tracks = {{ tracks|tojson }};
+    let tracks = [];
     let currentTrackIndex = 0;
     let isPaused = false;
     let isChanging = false;
@@ -229,6 +196,8 @@ template = """
     const audio = document.getElementById('preview-audio');
     const listViewContainer = document.getElementById('list-view-container');
     const replayButton = document.getElementById('replay-button');
+    const getReplayButton = document.getElementById('getReplayButton');
+    const configForm = document.getElementById('configForm');
 
     function getPalette(img, colorCount = 4) {
         colorCanvas.width = img.width; colorCanvas.height = img.height;
@@ -240,6 +209,7 @@ template = """
             if(colorMap[key]) colorMap[key].count++; else colorMap[key] = {r:pixels[i],g:pixels[i+1],b:pixels[i+2],count:1};
         }
         const sorted = Object.values(colorMap).sort((a, b) => b.count - a.count);
+        // Filter out very dark or very bright colors to get more vibrant background
         const filtered = sorted.filter(c => (c.r+c.g+c.b)>150 && (c.r+c.g+c.b)<700);
         return (filtered.length >= colorCount ? filtered : sorted).slice(0, colorCount).map(c => `rgb(${c.r},${c.g},${c.b})`);
     }
@@ -264,8 +234,10 @@ template = """
             } else { audio.volume = currentVolume; }
         }, 20);
     }
-    
+
     function showTrack(index) {
+      if (tracks.length === 0) return;
+
       isChanging = false;
       const track = tracks[index];
       currentSongDuration = track.duration;
@@ -276,22 +248,22 @@ template = """
       rankDisplayEl.textContent = `#${track.rank}`;
       rankPlayCountEl.textContent = `${track.PlayCount} Plays`;
       jellyfinLinkEl.href = track.jellyfinLink;
-      
+
       const img = new Image();
       img.crossOrigin = "Anonymous";
       img.src = track.Cover;
       img.onload = () => updateBackground(getPalette(img, 4));
       img.onerror = () => updateBackground(['#111', '#222', '#333', '#444']);
-      
+
       audio.src = track.PreviewUrl;
       audio.load();
-      audio.play().then(() => { fadeAudio(1, FADE_DURATION); }).catch(e => {});
+      audio.play().then(() => { fadeAudio(1, FADE_DURATION); }).catch(e => { console.error("Audio playback error:", e); });
 
       startTime = Date.now();
       if(animationFrameId) cancelAnimationFrame(animationFrameId);
       animateTimeline();
     }
-    
+
     function animateTimeline() {
         if(isPaused) {
             animationFrameId = requestAnimationFrame(animateTimeline);
@@ -300,7 +272,7 @@ template = """
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / currentSongDuration, 1);
         timelineBar.style.width = `${progress * 100}%`;
-        
+
         if (progress >= 1) {
             if (currentTrackIndex === tracks.length - 1) { // Is it the #1 song?
                 fadeAudio(0, FADE_DURATION, showListView);
@@ -313,7 +285,9 @@ template = """
     }
 
     function changeTrack(direction) {
-        if (isChanging || (direction === 'next' && currentTrackIndex === tracks.length -1) || (direction === 'prev' && currentTrackIndex === 0)) return;
+        if (isChanging || tracks.length === 0) return;
+        if ((direction === 'next' && currentTrackIndex === tracks.length - 1) || (direction === 'prev' && currentTrackIndex === 0)) return;
+
         isChanging = true;
         cancelAnimationFrame(animationFrameId);
         fadeAudio(0, FADE_DURATION, () => {
@@ -328,13 +302,17 @@ template = """
         carouselContainer.style.opacity = '0';
         rankContainer.style.opacity = '0';
         timelineContainer.style.opacity = '0';
+        carouselContainer.style.display = 'none';
+        rankContainer.style.display = 'none';
+        timelineContainer.style.display = 'none';
+        audio.pause(); // Ensure audio is stopped when list view is shown
 
         const trackList = document.getElementById('track-list');
         trackList.innerHTML = ''; // Clear previous list
-        
-        const sortedTracks = [...tracks].reverse(); // Show #1 first
 
-        sortedTracks.forEach(track => {
+        // tracks are already reversed from the backend for sequential play,
+        // so to show #1 first in the list view, we just iterate normally.
+        tracks.forEach(track => {
             const item = document.createElement('div');
             item.className = 'list-item';
             item.innerHTML = `
@@ -352,18 +330,62 @@ template = """
         listViewContainer.style.display = 'flex';
         setTimeout(() => listViewContainer.style.opacity = '1', 50);
     }
-    
+
     function resetView() {
         listViewContainer.style.opacity = '0';
         setTimeout(() => {
             listViewContainer.style.display = 'none';
+            carouselContainer.style.display = 'flex';
+            rankContainer.style.display = 'block';
+            timelineContainer.style.display = 'block';
             carouselContainer.style.opacity = '1';
             rankContainer.style.opacity = '1';
             timelineContainer.style.opacity = '1';
             currentTrackIndex = 0;
-            showTrack(0);
+            if (tracks.length > 0) {
+              showTrack(0);
+            } else {
+              // Optionally, show a message if no tracks are loaded
+              console.log("No tracks to play.");
+            }
         }, 500);
     }
+
+    async function fetchReplayData() {
+        try {
+            const response = await fetch('/api/replay');
+            if (!response.ok) {
+                const errorData = await response.json();
+                alert('Error fetching replay: ' + (errorData.error || response.statusText));
+                return;
+            }
+            tracks = await response.json();
+            if (tracks.length > 0) {
+                listViewContainer.style.opacity = '0';
+                listViewContainer.style.display = 'none';
+                carouselContainer.style.display = 'flex';
+                rankContainer.style.display = 'block';
+                timelineContainer.style.display = 'block';
+                setTimeout(() => {
+                    carouselContainer.style.opacity = '1';
+                    rankContainer.style.opacity = '1';
+                    timelineContainer.style.opacity = '1';
+                }, 50);
+                currentTrackIndex = 0;
+                showTrack(currentTrackIndex);
+            } else {
+                alert("No tracks found for replay. Make sure your user ID has play activity.");
+                // Hide replay UI if no tracks
+                carouselContainer.style.display = 'none';
+                rankContainer.style.display = 'none';
+                timelineContainer.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Failed to fetch replay data:', error);
+            alert('Failed to connect to backend or Jellyfin API. Check server URL and API key.');
+        }
+    }
+
 
     // --- Event Listeners ---
     nextBtn.addEventListener('click', () => changeTrack('next'));
@@ -374,117 +396,31 @@ template = """
     });
 
     document.body.addEventListener('click', (e) => {
-        if (e.target.closest('.top-bar, .nav-button, .jellyfin-link, .list-view-container')) return;
-        
+        // Exclude elements that should not trigger pause/play
+        if (e.target.closest('.top-bar, .nav-button, .jellyfin-link, #list-view-container')) return;
+
         isPaused = !isPaused;
 
         if (isPaused) {
             pausedTime = Date.now();
             if(!audio.paused) audio.pause();
         } else {
+            // Adjust start time to account for the pause duration
             startTime += (Date.now() - pausedTime);
-            if(audio.paused) audio.play().catch(e => {});
+            if(audio.paused) audio.play().catch(e => { console.error("Audio resume error:", e); });
         }
     });
-    
-    replayButton.addEventListener('click', resetView);
 
-    // Initial load
-    if (tracks.length > 0) {
-      showTrack(0);
-    }
+    replayButton.addEventListener('click', resetView);
+    getReplayButton.addEventListener('click', fetchReplayData);
+
+
+    // Initial state: Hide carousel/rank/timeline until replay data is fetched
+    // listViewContainer.style.display is already 'flex' by default in the original style,
+    // so we'll just manage its opacity and ensure it's hidden initially if no tracks.
+    listViewContainer.style.opacity = '0';
+    listViewContainer.style.display = 'none'; // Explicitly hide it.
   </script>
-  {% endif %}
 
 </body>
 </html>
-"""
-
-# ---------------------------
-# Routes
-# ---------------------------
-@app.route("/")
-def index():
-    return render_template_string(template, server=config["server"], apikey=config["apikey"], tracks=None)
-
-@app.route("/config", methods=["POST"])
-def update_config():
-    server = request.form["server"].strip()
-    apikey = request.form["apikey"].strip()
-    global config
-    config = save_config(server, apikey)
-    return redirect(url_for("index"))
-
-@app.route("/replay")
-def replay():
-    server = config.get("server")
-    api_key = config.get("apikey")
-    user_id = request.args.get("user_id") or "23fe68794ee1415db28073061646c169"
-
-    if not server or not api_key:
-        return redirect(url_for("index"))
-
-    try:
-        limit = 20
-        min_duration_s = 10
-        max_duration_s = 30
-        
-        url = f"{server.rstrip('/')}/Users/{user_id}/Items"
-        headers = {"X-Emby-Token": api_key}
-        params = {
-            "IncludeItemTypes": "Audio",
-            "Recursive": "true",
-            "SortBy": "PlayCount",
-            "SortOrder": "Descending",
-            "Fields": "ImageTags,AlbumId,MediaSources,Album,AlbumArtist,Artists",
-            "Limit": limit
-        }
-        r = requests.get(url, headers=headers, params=params, timeout=10)
-        r.raise_for_status()
-        items = r.json().get("Items", [])
-
-        tracks = []
-        for index, i in enumerate(items):
-            rank = index + 1
-            
-            # Calculate progressive duration
-            duration_s = round(max_duration_s - (max_duration_s - min_duration_s) * ((rank - 1) / (limit - 1)), 2)
-            
-            cover_url = ""
-            image_size = 600
-            if i.get('AlbumId'):
-                cover_url = f"{server.rstrip('/')}/Items/{i['AlbumId']}/Images/Primary?maxWidth={image_size}&maxHeight={image_size}&api_key={api_key}"
-            elif i.get('ImageTags') and i['ImageTags'].get('Primary'):
-                cover_url = f"{server.rstrip('/')}/Items/{i['Id']}/Images/Primary?maxWidth={image_size}&maxHeight={image_size}&api_key={api_key}"
-
-            endTimeTicks = int((max_duration_s + 5) * 10000000)
-            preview_url = f"{server.rstrip('/')}/Audio/{i['Id']}/stream?static=true&api_key={api_key}&startTimeTicks=0&endTimeTicks={endTimeTicks}"
-            
-            jellyfin_link = f"{server.rstrip('/')}/web/index.html#!/item?id={i['Id']}"
-
-            tracks.append({
-                "Id": i.get("Id"),
-                "Name": i.get("Name"),
-                "PlayCount": i.get("UserData", {}).get("PlayCount", 0),
-                "Album": i.get("Album"),
-                "Artist": i.get("AlbumArtist") or ", ".join(i.get("Artists", [])),
-                "Cover": cover_url,
-                "PreviewUrl": preview_url,
-                "rank": rank,
-                "duration": duration_s * 1000,
-                "jellyfinLink": jellyfin_link
-            })
-        
-        tracks.reverse()
-
-    except Exception as e:
-        print(f"Error fetching replay: {e}")
-        tracks = []
-
-    return render_template_string(template, server=server, apikey=api_key, tracks=tracks)
-
-# ---------------------------
-# Run
-# ---------------------------
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000, debug=True)
