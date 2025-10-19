@@ -11,7 +11,7 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       color: #eee;
       text-align:center;
       margin:0;
@@ -60,11 +60,13 @@
       background-color: rgba(0, 0, 0, 0.2); backdrop-filter: blur(10px); color: white;
       border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 50%;
       cursor: pointer; font-size: 32px; margin: 0 50px;
-      width: 70px; height: 70px; line-height: 65px;
+      width: 70px; height: 70px;
       transition: background-color 0.3s, transform 0.3s; z-index: 50;
-      display: flex; align-items: center; justify-content: center;
+      display: flex; align-items: center; justify-content: center; /* Center SVG */
     }
     .nav-button:hover { background-color: rgba(0, 0, 0, 0.4); transform: scale(1.1); }
+    .nav-button svg { fill: currentColor; width: 32px; height: 32px; } /* Style for SVG icons */
+
     .track-card {
       width:600px; height:600px; border-radius:30px; overflow:hidden;
       box-shadow: 0 25px 60px rgba(0,0,0,0.6); transition: transform 0.4s, box-shadow 0.4s;
@@ -107,17 +109,19 @@
         background: rgba(0, 0, 0, 0.3); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
         border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px;
         padding: 20px; flex-direction: column; transition: opacity 0.5s ease-in;
+        justify-content: flex-start; /* Align content to the top */
+        align-items: center; /* Center horizontally */
     }
     #list-view-container h2 { margin-top: 0; }
     #replay-button { font-size: 1em; padding: 10px 20px; cursor: pointer; background: rgba(255,255,255,0.2); border: none; border-radius: 10px; color: #fff; margin-bottom: 20px; }
-    #track-list { overflow-y: auto; text-align: left; }
+    #track-list { overflow-y: auto; text-align: left; width: 100%; }
     .list-item { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-    .list-item-cover { width: 60px; height: 60px; border-radius: 8px; margin-right: 15px; }
-    .list-item-info { flex-grow: 1; }
-    .list-item-title { font-weight: bold; }
-    .list-item-artist { font-size: 0.9em; color: #ccc; }
-    .list-item-rank { font-size: 1.5em; font-weight: bold; margin-right: 15px; }
-    .list-item-playcount { font-size: 0.9em; color: #ccc; text-align: right; }
+    .list-item-cover { width: 60px; height: 60px; border-radius: 8px; margin-right: 15px; flex-shrink: 0; }
+    .list-item-info { flex-grow: 1; min-width: 0; } /* Allow text to truncate if needed */
+    .list-item-title { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .list-item-artist { font-size: 0.9em; color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .list-item-rank { font-size: 1.5em; font-weight: bold; margin-right: 15px; flex-shrink: 0; }
+    .list-item-playcount { font-size: 0.9em; color: #ccc; text-align: right; flex-shrink: 0; margin-left: 10px; }
 
   </style>
 </head>
@@ -134,7 +138,9 @@
   </div>
 
   <main id="carousel-container" class="carousel-container" style="display: none; opacity: 0;">
-    <button id="prevBtn" class="nav-button">&lt;</button>
+    <button id="prevBtn" class="nav-button">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+    </button>
     <div id="main-track-card" class="track-card">
       <div class="track-info">
         <div class="track-name-container">
@@ -148,7 +154,9 @@
       </div>
       <audio id="preview-audio" preload="auto"></audio>
     </div>
-    <button id="nextBtn" class="nav-button">&gt;</button>
+    <button id="nextBtn" class="nav-button">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+    </button>
   </main>
 
   <div id="rank-container" class="rank-container" style="display: none; opacity: 0;">
@@ -247,10 +255,10 @@
       trackAlbumEl.textContent = `Album: ${track.Album || 'Unknown'}`;
       rankDisplayEl.textContent = `#${track.rank}`;
       rankPlayCountEl.textContent = `${track.PlayCount} Plays`;
-      jellyfinLinkEl.href = track.jellyfinLink;
+      jellyfinLinkEl.href = track.jellyfinLink; // Link is now correctly formed in backend
 
       const img = new Image();
-      img.crossOrigin = "Anonymous";
+      img.crossOrigin = "Anonymous"; // Required for cross-origin image loading for canvas
       img.src = track.Cover;
       img.onload = () => updateBackground(getPalette(img, 4));
       img.onerror = () => updateBackground(['#111', '#222', '#333', '#444']);
@@ -416,10 +424,8 @@
 
 
     // Initial state: Hide carousel/rank/timeline until replay data is fetched
-    // listViewContainer.style.display is already 'flex' by default in the original style,
-    // so we'll just manage its opacity and ensure it's hidden initially if no tracks.
     listViewContainer.style.opacity = '0';
-    listViewContainer.style.display = 'none'; // Explicitly hide it.
+    listViewContainer.style.display = 'none';
   </script>
 
 </body>

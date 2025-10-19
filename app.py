@@ -50,6 +50,14 @@ def get_replay_data():
         return jsonify({"error": "Jellyfin server URL or API key not configured."}), 400
 
     try:
+        # Get Server ID first
+        system_info_url = f"{server.rstrip('/')}/System/Info"
+        r_info = requests.get(system_info_url, headers={"X-Emby-Token": api_key}, timeout=10)
+        r_info.raise_for_status()
+        server_id = r_info.json().get("Id")
+        if not server_id:
+            return jsonify({"error": "Could not retrieve Jellyfin Server ID."}), 500
+
         limit = 20
         min_duration_s = 10
         max_duration_s = 30
@@ -85,7 +93,8 @@ def get_replay_data():
             endTimeTicks = int((max_duration_s + 5) * 10000000)
             preview_url = f"{server.rstrip('/')}/Audio/{i['Id']}/stream?static=true&api_key={api_key}&startTimeTicks=0&endTimeTicks={endTimeTicks}"
             
-            jellyfin_link = f"{server.rstrip('/')}/web/index.html#!/item?id={i['Id']}"
+            # Construct the Jellyfin details link using the fetched server_id and item ID
+            jellyfin_link = f"{server.rstrip('/')}/web/index.html#!/details?id={i['Id']}&serverId={server_id}"
 
             tracks.append({
                 "Id": i.get("Id"),
@@ -97,14 +106,15 @@ def get_replay_data():
                 "PreviewUrl": preview_url,
                 "rank": rank,
                 "duration": duration_s * 1000,
-                "jellyfinLink": jellyfin_link
+                "jellyfinLink": jellyfin_link,
+                "serverId": server_id # Include server_id for potential future use or debugging
             })
         
         tracks.reverse() # We still reverse here to get rank 1 first in the frontend
 
     except requests.exceptions.RequestException as e:
         print(f"Error fetching replay from Jellyfin: {e}")
-        return jsonify({"error": f"Failed to connect to Jellyfin server: {e}"}), 500
+        return jsonify({"error": f"Failed to connect to Jellyfin server or retrieve info: {e}"}), 500
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
