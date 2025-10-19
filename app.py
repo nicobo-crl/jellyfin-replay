@@ -1,6 +1,5 @@
 import os
 import json
-from datetime import datetime
 import requests
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 
@@ -40,14 +39,58 @@ def update_config():
     config = save_config(server, apikey)
     return redirect(url_for("index"))
 
+@app.route("/api/users", methods=["GET"])
+def get_users():
+    server = config.get("server")
+    api_key = config.get("apikey")
+
+    if not server or not api_key:
+        return jsonify({"error": "Jellyfin server URL or API key not configured."}), 400
+
+    try:
+        users_url = f"{server.rstrip('/')}/Users"
+        headers = {"X-Emby-Token": api_key}
+        r = requests.get(users_url, headers=headers, timeout=10)
+        r.raise_for_status()
+        
+        all_users = r.json()
+        
+        # Filter out hidden system users and format the data for the frontend
+        display_users = [
+            {
+                "Id": u["Id"],
+                "Name": u["Name"],
+                "PrimaryImageTag": u.get("PrimaryImageTag")
+            }
+            for u in all_users if not u.get("IsHidden")
+        ]
+
+        # Construct full avatar URLs
+        for user in display_users:
+            if user["PrimaryImageTag"]:
+                user["AvatarUrl"] = f"{server.rstrip('/')}/Users/{user['Id']}/Images/Primary?tag={user['PrimaryImageTag']}&quality=90"
+            else:
+                user["AvatarUrl"] = None # Or a link to a default avatar image
+
+        return jsonify(display_users)
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching Jellyfin users: {e}")
+        return jsonify({"error": f"Failed to connect to Jellyfin server to fetch users: {e}"}), 500
+    except Exception as e:
+        print(f"An unexpected error occurred while getting users: {e}")
+        return jsonify({"error": f"An unexpected error occurred while getting users: {e}"}), 500
+
 @app.route("/api/replay", methods=["GET"])
 def get_replay_data():
     server = config.get("server")
     api_key = config.get("apikey")
-    user_id = request.args.get("user_id") or "23fe68794ee1415db28073061646c169" # Default User ID
+    user_id = request.args.get("user_id") # User ID is now a required query parameter
 
     if not server or not api_key:
         return jsonify({"error": "Jellyfin server URL or API key not configured."}), 400
+    if not user_id:
+        return jsonify({"error": "A User ID must be provided to fetch replay data."}), 400
 
     try:
         # Get Server ID first
@@ -80,7 +123,6 @@ def get_replay_data():
         for index, i in enumerate(items):
             rank = index + 1
             
-            # Calculate progressive duration
             duration_s = round(max_duration_s - (max_duration_s - min_duration_s) * ((rank - 1) / (limit - 1)), 2)
             
             cover_url = ""
@@ -93,7 +135,6 @@ def get_replay_data():
             endTimeTicks = int((max_duration_s + 5) * 10000000)
             preview_url = f"{server.rstrip('/')}/Audio/{i['Id']}/stream?static=true&api_key={api_key}&startTimeTicks=0&endTimeTicks={endTimeTicks}"
             
-            # Construct the Jellyfin details link using the fetched server_id and item ID
             jellyfin_link = f"{server.rstrip('/')}/web/index.html#!/details?id={i['Id']}&serverId={server_id}"
 
             tracks.append({
@@ -107,16 +148,14 @@ def get_replay_data():
                 "rank": rank,
                 "duration": duration_s * 1000,
                 "jellyfinLink": jellyfin_link,
-                "serverId": server_id # Include server_id for potential future use or debugging
+                "serverId": server_id
             })
         
-        tracks.reverse() # We still reverse here to get rank 1 first in the frontend
+        tracks.reverse()
 
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching replay from Jellyfin: {e}")
-        return jsonify({"error": f"Failed to connect to Jellyfin server or retrieve info: {e}"}), 500
+        return jsonify({"error": f"Failed to connect to Jellyfin server: {e}"}), 500
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
         return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
 
     return jsonify(tracks)

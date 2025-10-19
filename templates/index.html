@@ -54,6 +54,43 @@
     }
     .top-bar button { cursor: pointer; background: rgba(255,255,255,0.2); }
     .top-bar button:hover { background: rgba(255,255,255,0.3); }
+    
+    /* User Selection Modal Styles */
+    #user-selection-modal {
+        display: none; position: fixed; inset: 0; z-index: 200;
+        background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px);
+        align-items: center; justify-content: center;
+        opacity: 0; transition: opacity 0.3s ease;
+    }
+    .user-selection-content {
+        background: rgba(20, 20, 20, 0.8); border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px; padding: 30px; text-align: center;
+        max-width: 90%;
+    }
+    .user-selection-content h2 { margin-top: 0; }
+    #user-list {
+        display: flex; flex-wrap: wrap; gap: 20px;
+        justify-content: center; margin-top: 20px;
+    }
+    .user-card {
+        display: flex; flex-direction: column; align-items: center;
+        gap: 10px; cursor: pointer; padding: 10px; border-radius: 10px;
+        transition: background-color 0.2s, transform 0.2s;
+        width: 120px;
+    }
+    .user-card:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        transform: scale(1.05);
+    }
+    .user-avatar {
+        width: 100px; height: 100px; border-radius: 50%;
+        background-color: #333;
+        background-size: cover;
+        background-position: center;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+    }
+    .user-name { font-weight: bold; }
+
 
     .carousel-container { display: flex; align-items: center; justify-content: center; z-index: 10; transition: opacity 0.5s ease-out; }
     .nav-button {
@@ -62,10 +99,10 @@
       cursor: pointer; font-size: 32px; margin: 0 50px;
       width: 70px; height: 70px;
       transition: background-color 0.3s, transform 0.3s; z-index: 50;
-      display: flex; align-items: center; justify-content: center; /* Center SVG */
+      display: flex; align-items: center; justify-content: center;
     }
     .nav-button:hover { background-color: rgba(0, 0, 0, 0.4); transform: scale(1.1); }
-    .nav-button svg { fill: currentColor; width: 32px; height: 32px; } /* Style for SVG icons */
+    .nav-button svg { fill: currentColor; width: 32px; height: 32px; }
 
     .track-card {
       width:600px; height:600px; border-radius:30px; overflow:hidden;
@@ -109,19 +146,17 @@
         background: rgba(0, 0, 0, 0.3); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
         border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px;
         padding: 20px; flex-direction: column; transition: opacity 0.5s ease-in;
-        justify-content: flex-start; /* Align content to the top */
-        align-items: center; /* Center horizontally */
     }
     #list-view-container h2 { margin-top: 0; }
     #replay-button { font-size: 1em; padding: 10px 20px; cursor: pointer; background: rgba(255,255,255,0.2); border: none; border-radius: 10px; color: #fff; margin-bottom: 20px; }
-    #track-list { overflow-y: auto; text-align: left; width: 100%; }
+    #track-list { overflow-y: auto; text-align: left; }
     .list-item { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-    .list-item-cover { width: 60px; height: 60px; border-radius: 8px; margin-right: 15px; flex-shrink: 0; }
-    .list-item-info { flex-grow: 1; min-width: 0; } /* Allow text to truncate if needed */
-    .list-item-title { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .list-item-artist { font-size: 0.9em; color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .list-item-rank { font-size: 1.5em; font-weight: bold; margin-right: 15px; flex-shrink: 0; }
-    .list-item-playcount { font-size: 0.9em; color: #ccc; text-align: right; flex-shrink: 0; margin-left: 10px; }
+    .list-item-cover { width: 60px; height: 60px; border-radius: 8px; margin-right: 15px; }
+    .list-item-info { flex-grow: 1; }
+    .list-item-title { font-weight: bold; }
+    .list-item-artist { font-size: 0.9em; color: #ccc; }
+    .list-item-rank { font-size: 1.5em; font-weight: bold; margin-right: 15px; }
+    .list-item-playcount { font-size: 0.9em; color: #ccc; text-align: right; }
 
   </style>
 </head>
@@ -132,10 +167,19 @@
     <form id="configForm" action="/config" method="post">
       <input type="text" name="server" placeholder="Server URL" value="{{ server }}" required>
       <input type="text" name="apikey" placeholder="API Key" value="{{ apikey }}" required>
-      <button type="submit">Save</button>
+      <button type="submit">Save Config</button>
     </form>
     <button id="getReplayButton">Get Replay</button>
   </div>
+  
+  <!-- User Selection Modal -->
+  <div id="user-selection-modal">
+    <div class="user-selection-content">
+        <h2>Whose replay do you want to see?</h2>
+        <div id="user-list"></div>
+    </div>
+  </div>
+
 
   <main id="carousel-container" class="carousel-container" style="display: none; opacity: 0;">
     <button id="prevBtn" class="nav-button">
@@ -205,7 +249,8 @@
     const listViewContainer = document.getElementById('list-view-container');
     const replayButton = document.getElementById('replay-button');
     const getReplayButton = document.getElementById('getReplayButton');
-    const configForm = document.getElementById('configForm');
+    const userSelectionModal = document.getElementById('user-selection-modal');
+    const userListContainer = document.getElementById('user-list');
 
     function getPalette(img, colorCount = 4) {
         colorCanvas.width = img.width; colorCanvas.height = img.height;
@@ -217,7 +262,6 @@
             if(colorMap[key]) colorMap[key].count++; else colorMap[key] = {r:pixels[i],g:pixels[i+1],b:pixels[i+2],count:1};
         }
         const sorted = Object.values(colorMap).sort((a, b) => b.count - a.count);
-        // Filter out very dark or very bright colors to get more vibrant background
         const filtered = sorted.filter(c => (c.r+c.g+c.b)>150 && (c.r+c.g+c.b)<700);
         return (filtered.length >= colorCount ? filtered : sorted).slice(0, colorCount).map(c => `rgb(${c.r},${c.g},${c.b})`);
     }
@@ -255,10 +299,10 @@
       trackAlbumEl.textContent = `Album: ${track.Album || 'Unknown'}`;
       rankDisplayEl.textContent = `#${track.rank}`;
       rankPlayCountEl.textContent = `${track.PlayCount} Plays`;
-      jellyfinLinkEl.href = track.jellyfinLink; // Link is now correctly formed in backend
+      jellyfinLinkEl.href = track.jellyfinLink;
 
       const img = new Image();
-      img.crossOrigin = "Anonymous"; // Required for cross-origin image loading for canvas
+      img.crossOrigin = "Anonymous";
       img.src = track.Cover;
       img.onload = () => updateBackground(getPalette(img, 4));
       img.onerror = () => updateBackground(['#111', '#222', '#333', '#444']);
@@ -282,7 +326,7 @@
         timelineBar.style.width = `${progress * 100}%`;
 
         if (progress >= 1) {
-            if (currentTrackIndex === tracks.length - 1) { // Is it the #1 song?
+            if (currentTrackIndex === tracks.length - 1) {
                 fadeAudio(0, FADE_DURATION, showListView);
             } else {
                 changeTrack('next');
@@ -310,16 +354,15 @@
         carouselContainer.style.opacity = '0';
         rankContainer.style.opacity = '0';
         timelineContainer.style.opacity = '0';
-        carouselContainer.style.display = 'none';
-        rankContainer.style.display = 'none';
-        timelineContainer.style.display = 'none';
-        audio.pause(); // Ensure audio is stopped when list view is shown
+        setTimeout(() => {
+            carouselContainer.style.display = 'none';
+            rankContainer.style.display = 'none';
+            timelineContainer.style.display = 'none';
+        }, 500);
+        audio.pause();
 
         const trackList = document.getElementById('track-list');
-        trackList.innerHTML = ''; // Clear previous list
-
-        // tracks are already reversed from the backend for sequential play,
-        // so to show #1 first in the list view, we just iterate normally.
+        trackList.innerHTML = '';
         tracks.forEach(track => {
             const item = document.createElement('div');
             item.className = 'list-item';
@@ -346,22 +389,69 @@
             carouselContainer.style.display = 'flex';
             rankContainer.style.display = 'block';
             timelineContainer.style.display = 'block';
-            carouselContainer.style.opacity = '1';
-            rankContainer.style.opacity = '1';
-            timelineContainer.style.opacity = '1';
+            setTimeout(() => {
+              carouselContainer.style.opacity = '1';
+              rankContainer.style.opacity = '1';
+              timelineContainer.style.opacity = '1';
+            }, 50);
             currentTrackIndex = 0;
             if (tracks.length > 0) {
               showTrack(0);
-            } else {
-              // Optionally, show a message if no tracks are loaded
-              console.log("No tracks to play.");
             }
         }, 500);
     }
 
-    async function fetchReplayData() {
+    async function showUserSelection() {
         try {
-            const response = await fetch('/api/replay');
+            const response = await fetch('/api/users');
+            if (!response.ok) {
+                const errorData = await response.json();
+                alert('Error fetching users: ' + (errorData.error || response.statusText));
+                return;
+            }
+            const users = await response.json();
+            userListContainer.innerHTML = ''; // Clear previous list
+
+            if (users.length === 0) {
+                alert("No users found on this Jellyfin server.");
+                return;
+            }
+
+            users.forEach(user => {
+                const userCard = document.createElement('div');
+                userCard.className = 'user-card';
+                userCard.dataset.userId = user.Id;
+                
+                const avatar = document.createElement('div');
+                avatar.className = 'user-avatar';
+                if(user.AvatarUrl) {
+                    avatar.style.backgroundImage = `url(${user.AvatarUrl})`;
+                }
+                
+                const name = document.createElement('span');
+                name.className = 'user-name';
+                name.textContent = user.Name;
+
+                userCard.appendChild(avatar);
+                userCard.appendChild(name);
+                userListContainer.appendChild(userCard);
+            });
+            
+            userSelectionModal.style.display = 'flex';
+            setTimeout(() => userSelectionModal.style.opacity = '1', 10);
+
+        } catch (error) {
+            console.error('Failed to fetch user list:', error);
+            alert('Failed to connect to the backend to get the user list.');
+        }
+    }
+
+    async function fetchReplayData(userId) {
+        userSelectionModal.style.opacity = '0';
+        setTimeout(() => userSelectionModal.style.display = 'none', 300);
+
+        try {
+            const response = await fetch(`/api/replay?user_id=${userId}`);
             if (!response.ok) {
                 const errorData = await response.json();
                 alert('Error fetching replay: ' + (errorData.error || response.statusText));
@@ -382,18 +472,13 @@
                 currentTrackIndex = 0;
                 showTrack(currentTrackIndex);
             } else {
-                alert("No tracks found for replay. Make sure your user ID has play activity.");
-                // Hide replay UI if no tracks
-                carouselContainer.style.display = 'none';
-                rankContainer.style.display = 'none';
-                timelineContainer.style.display = 'none';
+                alert("No tracks found for this user's replay.");
             }
         } catch (error) {
             console.error('Failed to fetch replay data:', error);
-            alert('Failed to connect to backend or Jellyfin API. Check server URL and API key.');
+            alert('Failed to connect to backend or Jellyfin API.');
         }
     }
-
 
     // --- Event Listeners ---
     nextBtn.addEventListener('click', () => changeTrack('next'));
@@ -404,27 +489,40 @@
     });
 
     document.body.addEventListener('click', (e) => {
-        // Exclude elements that should not trigger pause/play
-        if (e.target.closest('.top-bar, .nav-button, .jellyfin-link, #list-view-container')) return;
-
+        if (e.target.closest('.top-bar, .nav-button, .jellyfin-link, #list-view-container, #user-selection-modal')) return;
+        
         isPaused = !isPaused;
 
         if (isPaused) {
             pausedTime = Date.now();
             if(!audio.paused) audio.pause();
         } else {
-            // Adjust start time to account for the pause duration
             startTime += (Date.now() - pausedTime);
-            if(audio.paused) audio.play().catch(e => { console.error("Audio resume error:", e); });
+            if(audio.paused) audio.play().catch(e => {});
+        }
+    });
+    
+    replayButton.addEventListener('click', resetView);
+    getReplayButton.addEventListener('click', showUserSelection);
+    
+    // Handle clicks on user cards in the modal
+    userListContainer.addEventListener('click', (e) => {
+        const userCard = e.target.closest('.user-card');
+        if (userCard) {
+            const userId = userCard.dataset.userId;
+            fetchReplayData(userId);
+        }
+    });
+    
+    // Close modal if clicking on the background
+    userSelectionModal.addEventListener('click', (e) => {
+        if(e.target === userSelectionModal) {
+            userSelectionModal.style.opacity = '0';
+            setTimeout(() => userSelectionModal.style.display = 'none', 300);
         }
     });
 
-    replayButton.addEventListener('click', resetView);
-    getReplayButton.addEventListener('click', fetchReplayData);
-
-
-    // Initial state: Hide carousel/rank/timeline until replay data is fetched
-    listViewContainer.style.opacity = '0';
+    // Initial state
     listViewContainer.style.display = 'none';
   </script>
 
